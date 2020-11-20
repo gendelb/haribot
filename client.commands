@@ -1,0 +1,10 @@
+// Read all the files in the ./commands directory
+const files = readdirSync("./commands").filter(file => file.endsWith(".js"));
+
+// Iterate over all the found files
+for (const file of files) {
+  // Require the file
+  const command = require(`./commands/${file}`);
+  // Set the command in the commands collection
+  client.commands.set(command.name, command);
+}

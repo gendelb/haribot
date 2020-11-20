@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "@discordjs/collection": "^0.1.6",
+    "args": "^5.0.1",
     "axios": "^0.21.0",
     "client": "^0.0.1",
     "console": "^0.7.2",

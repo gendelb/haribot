@@ -1,111 +1,82 @@
-// To install Discord.JS and Erela.JS, run:
-// npm install discord.js erela.js
-const { Client } = require("discord.js");
+const { Client, Collection } = require("discord.js");
+const { readdirSync } = require("fs");
 const { Manager } = require("erela.js");
-const config = require("./config.json");
-// Initialize the Discord.JS Client.
+
 const client = new Client();
+client.commands = new Collection();
 
-client.on('message', message => {
-  if (message.author.bot) return;
-  if (message.channel.type == 'dm') return;
-  if (!message.content.toLowerCase().startsWith(config.prefix.toLowerCase())) return;
-  if (message.content.startsWith(`<@!${client.user.id}>`) || message.content.startsWith(`<@${client.user.id}>`)) return;
+const files = readdirSync("./commands")
+  .filter(file => file.endsWith(".js"));
 
- const args = message.content
-     .trim().slice(config.prefix.length)
-     .split(/ +/g);
- const command = args.shift().toLowerCase();
-
- try {
-     const commandFile = require(`./commands/${command}.js`)
-     commandFile.run(client, message, args);
- } catch (err) {
- console.error('Erro:' + err);
+for (const file of files) {
+  const command = require(`./commands/${file}`);
+  client.commands.set(command.name, command);
 }
+
+client.on("ready", () => {
+  let activities = [
+      `.play`,
+      `Manutenção!`,
+      `Feito Por GB ˢᶜᵃʳᶠᵉ#6678`,
+      `Atualizando!`
+    ],
+    i = 0;
+  setInterval( () => client.user.setActivity(`${activities[i++ % activities.length]}`, {
+        type: "STREAMING"
+      }), 1000 * 10); 
+  client.user
+      .setStatus("dnd")
+      .catch(console.error);
+console.log("PAI TA ON!")
 });
-// Initiate the Manager with some options and listen to some events.
+
 client.manager = new Manager({
-  // Pass an array of node. Note: You do not need to pass any if you are using the default values (ones shown below).
   nodes: [
-    // If you pass a object like so the "host" property is required
     {
-      host: "localhost", // Optional if Lavalink is local
-      port: 8000, // Optional if Lavalink is set to default
-      password: "29088001", // Optional if Lavalink is set to default
-    },
-  ],
-  // A send method to send data to the Discord WebSocket using your library.
-  // Getting the shard for the guild and sending the data to the WebSocket.
-  send(id, payload) {
+      host: "localhost",
+      password: "29088001",
+      port: 8000,
+    }
+],
+  autoPlay: true,
+  send: (id, payload) => {
     const guild = client.guilds.cache.get(id);
     if (guild) guild.shard.send(payload);
-  },
+  }
 })
-  .on("nodeConnect", node => console.log(`Node ${node.options.identifier} connected`))
-  .on("nodeError", (node, error) => console.log(`Node ${node.options.identifier} had an error: ${error.message}`))
+  .on("nodeConnect", node => console.log(`Node "${node.options.identifier}" connected.`))
+  .on("nodeError", (node, error) => console.log(
+    `Node "${node.options.identifier}" encountered an error: ${error.message}.`
+  ))
   .on("trackStart", (player, track) => {
-    client.channels.cache
-      .get(player.textChannel)
-      .send(`Now playing: ${track.title}`);
+    const channel = client.channels.cache.get(player.textChannel);
+    channel.send(`Now playing: \`${track.title}\`, requested by \`${track.requester.tag}\`.`);
   })
-  .on("queueEnd", (player) => {
-    client.channels.cache
-      .get(player.textChannel)
-      .send("Queue has ended.");
-
+  .on("queueEnd", player => {
+    const channel = client.channels.cache.get(player.textChannel);
+    channel.send("Queue has ended.");
     player.destroy();
   });
 
-// Ready event fires when the Discord.JS client is ready.
-// Use EventEmitter#once() so it only fires once.
-client.once("ready", () => {
-  console.log("HARIBOT ONLINE!");
-  // Initiate the manager.
-  client.manager.init(client.user.id);
-});
+  client.once("ready", () => {
+    client.manager.init(client.user.id);
+    console.log(`Logged in as ${client.user.tag}`);
+  });
+  
+client.on("raw", d => client.manager.updateVoiceState(d));
 
-client.on("raw", (d) => client.manager.updateVoiceState(d));
+client.on("message", async message => {
+  if (!message.content.startsWith(".") || !message.guild || message.author.bot) return;
+  const [name, ...args] = message.content.slice(1).split(/\s+/g);
 
-client.on("message", async (message) => {
-  if (message.content.startsWith("!play")) {
-    // Note: This example only works for retrieving tracks using a query, such as "Rick Astley - Never Gonna Give You Up".
+  const command = client.commands.get(name);
+  if (!command) return;
 
-    // Retrieves tracks with your query and the requester of the tracks.
-    // Note: This retrieves tracks from youtube by default, to get from other sources you must enable them in application.yml and provide a link for the source.
-    // Note: If you want to "search" for tracks you must provide an object with a "query" property being the query to use, and "source" being one of "youtube", "soundcloud".
-    const res = await client.manager.search(
-      message.content.slice(6),
-      message.author
-    );
-
-    // Create a new player. This will return the player if it already exists.
-    const player = client.manager.create({
-      guild: message.guild.id,
-      voiceChannel: message.member.voice.channel.id,
-      textChannel: message.channel.id,
-    });
-
-    // Connect to the voice channel.
-    player.connect();
-
-    // Adds the first track to the queue.
-    player.queue.add(res.tracks[0]);
-    message.channel.send(`Enqueuing track ${res.tracks[0].title}.`);
-
-    // Plays the player (plays the first track in the queue).
-    // The if statement is needed else it will play the current track again
-    if (!player.playing && !player.paused && !player.queue.size)
-      player.play();
-
-    // For playlists you'll have to use slightly different if statement
-    if (
-      !player.playing &&
-      !player.paused &&
-      player.queue.totalSize === res.tracks.length
-    )
-      player.play();
+  try {
+    command.run(message, args);
+  } catch (err) {
+    message.reply(`an error occurred while running the command: ${err.message}`);
   }
 });
-// Here we send voice data to lavalink whenever the bot joins a voice channel to play audio in the channel.
+
 client.login("NjY2MDg3NDIxMjU0ODI4MDMy.XhvEQA.VbOPMHzaQJdZ-3oRuoPWVFHhc5I");

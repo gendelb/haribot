@@ -1,14 +1,8 @@
-module.exports.run = async (client, message, args) => {
-    const m = await message.channel.send('ping?');
-  
-    m.edit(`🏓 **| Pong!**\nLatência do Server: **${m.createdTimestamp -
-        message.createdTimestamp}ms.**\nLatência da API: **${Math.round(
-        client.ws.ping
-      )}ms**`
-    );
-  };
-  
-  module.exports.help = {
-    name: 'ping',
-    aliases: ['pg']
-  };
+module.exports = {
+    // The name of the command, this has to be different in every command
+    name: "ping",
+    // The function to run every time the command is ran by a user
+    run: (message) => {
+      message.reply("**🏓Pong!**")
+    }
+  }
